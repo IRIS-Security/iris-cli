@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "iris-security-cli"
+version = "0.2.12"
+description = "IRIS CLI — declare, compile, preview, enforce, witness, certify, sentinel"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Topic :: Security",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+  "iris-security-core>=0.1.16",
+  "iris-security-sdk>=0.2.12",
+  "click>=8.1",
+  "rich>=13.0",
+  "pyyaml>=6.0",
+]
+
+[project.optional-dependencies]
+scm = ["iris-security-scm[all]>=0.2.0"]
+
+[project.urls]
+Homepage = "https://github.com/gimartinb/iris-sdk"
+Repository = "https://github.com/gimartinb/iris-sdk"
+
+[project.scripts]
+iris = "iris_cli.main:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tools*", "demo*", "docs*"]
