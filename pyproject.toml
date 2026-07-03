@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iris-security-cli"
-version = "0.2.12"
+version = "0.2.16"
 description = "IRIS CLI — declare, compile, preview, enforce, witness, certify, sentinel"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -21,7 +21,7 @@ classifiers = [
 ]
 dependencies = [
   "iris-security-core>=0.1.16",
-  "iris-security-sdk>=0.2.12",
+  "iris-security-sdk>=0.2.16",
   "click>=8.1",
   "rich>=13.0",
   "pyyaml>=6.0",

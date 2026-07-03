@@ -17,6 +17,7 @@ Every iris scan or iris certify is a weekly active developer event.
 import click
 import sys
 from pathlib import Path
+from typing import Any
 from rich.console import Console
 from rich.panel import Panel
 
@@ -25,9 +26,31 @@ from iris_core.cli_timing.instrument import timed_cli_command
 console = Console()
 
 
-@click.group()
+class IrisCLI(click.Group):
+    """Click group that records daily aggregated CLI usage after each command."""
+
+    def invoke(self, ctx: click.Context) -> Any:
+        result = super().invoke(ctx)
+        if not ctx.resilient_parsing:
+            command = self._resolved_command(ctx)
+            if command:
+                from iris._telemetry import maybe_record_cli_usage
+
+                maybe_record_cli_usage(command)
+        return result
+
+    @staticmethod
+    def _resolved_command(ctx: click.Context) -> str | None:
+        if ctx.invoked_subcommand is None:
+            return None
+        if ctx.command_path:
+            return " ".join(ctx.command_path)
+        return ctx.invoked_subcommand
+
+
+@click.group(cls=IrisCLI)
 @click.version_option(
-    version="0.2.12",
+    version="0.2.16",
     prog_name="iris",
     message="%(prog)s %(version)s · AARM Core conformant (R1–R6) · "
             "AIUC-1 Q1 2026 aligned · https://iris-security.io",
@@ -559,6 +582,9 @@ def ping():
 
 from iris_cli.compliance_check_cmd import compliance_check_cmd
 compliance.add_command(compliance_check_cmd, name="check")
+
+from iris_cli.compliance_scan_cmd import compliance_scan_cmd
+compliance.add_command(compliance_scan_cmd, name="scan")
 
 cli.add_command(compliance)
 cli.add_command(framework)

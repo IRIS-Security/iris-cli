@@ -1,0 +1,74 @@
+# Copyright 2024-2025 Gilbert Martin / IRIS Security, Inc.
+# Composite GitHub Action — wraps the OSS iris-security-cli (offline by default).
+name: IRIS AI Governance
+description: >-
+  Scan a repo for AI compliance obligations and validate policies with IRIS.
+  Runs the OSS iris CLI locally — no cloud account required. Optional cloud
+  push when api-key is set.
+branding:
+  icon: shield
+  color: blue
+
+inputs:
+  command:
+    description: 'IRIS command to run ("compliance scan" or "policy validate")'
+    required: false
+    default: compliance scan
+  fail-on:
+    description: Fail threshold for compliance scan (blocker, required, or none)
+    required: false
+    default: blocker
+  api-key:
+    description: Optional IRIS Cloud API key — enables --push on compliance scan
+    required: false
+    default: ""
+  working-directory:
+    description: Directory to scan or validate
+    required: false
+    default: "."
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.12"
+
+    - name: Install IRIS CLI
+      shell: bash
+      run: pip install iris-security-cli
+
+    - name: Run IRIS governance check
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      env:
+        IRIS_API_KEY: ${{ inputs.api-key }}
+        IRIS_COMMAND: ${{ inputs.command }}
+        IRIS_FAIL_ON: ${{ inputs.fail-on }}
+      run: |
+        set -euo pipefail
+
+        push_flag=()
+        if [ -n "${IRIS_API_KEY:-}" ]; then
+          push_flag=(--push)
+        fi
+
+        case "${IRIS_COMMAND}" in
+          "compliance scan")
+            if iris compliance scan --help 2>&1 | grep -q -- '--fail-on'; then
+              iris compliance scan --path . --json --fail-on "${IRIS_FAIL_ON}" "${push_flag[@]}"
+            else
+              iris compliance scan --path . --json "${push_flag[@]}" > /tmp/iris-scan.json
+              FAIL_ON="${IRIS_FAIL_ON}" python3 -c "import json, os, sys; fail_on=os.environ['FAIL_ON']; rank={'blocker':0,'required':1,'recommended':2}; data=json.load(open('/tmp/iris-scan.json')); obligations=data.get('obligations',[]); threshold=rank[fail_on]; blocking=[o for o in obligations if rank.get(o.get('severity','recommended'),9)<=threshold]; sys.exit(1 if blocking and fail_on!='none' else 0)"
+            fi
+            ;;
+          "policy validate")
+            iris org-policy validate --strict
+            ;;
+          *)
+            echo "Unknown command: ${IRIS_COMMAND}" >&2
+            echo 'Supported: "compliance scan", "policy validate"' >&2
+            exit 1
+            ;;
+        esac

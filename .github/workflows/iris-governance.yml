@@ -1,0 +1,24 @@
+# IRIS dogfood governance — copied to all three public OSS repos via extract-oss.sh
+# Copyright 2024-2025 Gilbert Martin / IRIS Security, Inc.
+
+name: IRIS Governance
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  iris-governance:
+    name: IRIS AI Governance
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # TODO: repin to @v1 after iris-cli release tags v1
+      - uses: IRIS-Security/iris-cli@main
+        with:
+          command: compliance scan
+          fail-on: blocker
