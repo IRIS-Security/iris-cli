@@ -50,7 +50,7 @@ class IrisCLI(click.Group):
 
 @click.group(cls=IrisCLI)
 @click.version_option(
-    version="0.2.16",
+    version="0.2.17",
     prog_name="iris",
     message="%(prog)s %(version)s · AARM Core conformant (R1–R6) · "
             "AIUC-1 Q1 2026 aligned · https://iris-security.io",
@@ -485,12 +485,20 @@ framework.add_command(framework_suggest, name="suggest")
 from iris_cli.assess import compliance_assess
 compliance.add_command(compliance_assess)
 
-# Wire in evidence commands
-from iris_cli.evidence import evidence
-cli.add_command(evidence)
+# Wire in evidence commands (optional — requires iris-security-core>=0.1.17 exporters)
+try:
+    from iris_cli.evidence import evidence
 
-from iris_cli.vault import vault
-cli.add_command(vault)
+    cli.add_command(evidence)
+except ModuleNotFoundError:
+    pass
+
+try:
+    from iris_cli.vault import vault
+
+    cli.add_command(vault)
+except ModuleNotFoundError:
+    pass
 
 from iris_cli.framework_test import test as framework_test_cmd_legacy
 # framework_test kept for internal imports; certify is the primary command

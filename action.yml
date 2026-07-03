@@ -37,7 +37,8 @@ runs:
 
     - name: Install IRIS CLI
       shell: bash
-      run: pip install iris-security-cli
+      run: |
+        pip install "iris-security-core>=0.1.17" "iris-security-sdk>=0.2.17" "iris-security-cli>=0.2.17"
 
     - name: Run IRIS governance check
       shell: bash
