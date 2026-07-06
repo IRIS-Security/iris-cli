@@ -55,6 +55,11 @@ def _event_policy(event: dict) -> str:
     return "—"
 
 
+def _event_r5_satisfied(event: dict) -> bool:
+    """R5 tamper-evidence applies only to HMAC-signed vault events (Evidence Vault v2)."""
+    return bool(event.get("signature"))
+
+
 def _event_hash(event: dict) -> str:
     if event.get("hash"):
         return str(event["hash"])
@@ -150,7 +155,7 @@ def _format_splunk(event: dict) -> dict:
             "iris_regulation": _event_regulation(event),
             "iris_event_id": event.get("event_id", ""),
             "iris_hash": _event_hash(event),
-            "aarm_r5": True,
+            "aarm_r5": _event_r5_satisfied(event),
             "aiuc1_control": _aiuc1_control(event),
         },
     }
@@ -195,7 +200,7 @@ def _format_elastic(event: dict) -> dict:
         "risk.score": _event_risk_score(event),
         "labels": {
             "iris_regulation": _event_regulation(event),
-            "aarm_r5": "true",
+            "aarm_r5": "true" if _event_r5_satisfied(event) else "false",
         },
     }
 
@@ -247,7 +252,7 @@ def _format_otel_envelope(events: List[dict]) -> dict:
                         _otel_attribute("service.name", "iris-cli"),
                         _otel_attribute("service.version", IRIS_VERSION),
                         _otel_attribute("iris.vendor", "IRIS Security, Inc."),
-                        _otel_attribute("aarm.conformance", "Core"),
+                        _otel_attribute("aarm.alignment", "designed-toward"),
                     ],
                 },
                 "scopeSpans": [
@@ -409,7 +414,7 @@ def _print_export_summary(
         "Formats: Splunk HEC · Datadog · Elastic ECS · OTel OTLP"
     )
     err_console.print(
-        "AARM R8 conformant · https://iris-security.io"
+        "OTel export · https://iris-security.io"
     )
 
 
@@ -524,7 +529,7 @@ def audit_log_export(
     Plug IRIS evidence directly into your existing security stack.
     No IRIS account required — reads from local Evidence Vault.
 
-    AARM R8 conformant: standard telemetry export.
+    Exports governance telemetry in standard SIEM formats (including OTel OTLP).
 
     Examples:
       iris audit-log export --format splunk --output events.json

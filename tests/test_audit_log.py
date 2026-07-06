@@ -45,7 +45,7 @@ def test_splunk_format_includes_iris_fields():
     payload = _format_splunk(_sample_event())
     assert payload["host"] == "iris-governance"
     assert payload["event"]["iris_decision"] == "DENY"
-    assert payload["event"]["aarm_r5"] is True
+    assert payload["event"]["aarm_r5"] is False
 
 
 def test_cef_format_is_single_line():

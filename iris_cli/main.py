@@ -52,8 +52,9 @@ class IrisCLI(click.Group):
 @click.version_option(
     version="0.2.17",
     prog_name="iris",
-    message="%(prog)s %(version)s · AARM Core conformant (R1–R6) · "
-            "AIUC-1 Q1 2026 aligned · https://iris-security.io",
+    message="%(prog)s %(version)s · Evaluates agent actions through an in-process "
+            "Cedar engine before adapter-wrapped calls proceed; records decisions "
+            "to a local Evidence Vault.",
 )
 def cli():
     """

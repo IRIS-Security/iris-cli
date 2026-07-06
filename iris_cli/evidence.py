@@ -981,7 +981,8 @@ def evidence_query(
     to exactly the events that need attention.
 
     This is the CLI equivalent of Evidence Vault Signal mode.
-    AARM R5 conformant — all entries are tamper-evident.
+    Local vault events are unsigned JSONL by default; Evidence Vault v2 adds
+    HMAC signing and hash chaining for tamper-evident receipts.
 
     Examples:
       iris evidence query --decision deny
