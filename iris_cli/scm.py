@@ -9,6 +9,8 @@ from pathlib import Path
 import click
 from rich.console import Console
 
+from iris_core.entitlements import Entitlements, Feature
+
 console = Console()
 
 
@@ -94,6 +96,9 @@ def scan_org(
       export GITHUB_TOKEN=ghp_... && iris scm scan-org --platform github --org my-org
       iris scm scan-org --platform gitlab --group my-group --token $GITLAB_TOKEN
     """
+    Entitlements().require(Feature.SCM_ORG_SCANNER, context="org-wide SCM scan")
+    if comment:
+        Entitlements().require(Feature.SCM_PR_COMMENTS, context="SCM PR comments")
     if platform == "github":
         if not org:
             console.print("[red]--org is required for GitHub scans[/red]")
@@ -330,7 +335,7 @@ Step 1: Go to github.com/organizations/{org_name}/settings/apps
 Step 2: Click "New GitHub App"
 Step 3: Fill in:
   Name: IRIS Governance
-  Homepage URL: https://github.com/gimartinb/iris-sdk
+  Homepage URL: https://github.com/IRIS-Security/iris-sdk
   Webhook: leave unchecked for now
 Step 4: Set permissions (read-only):
   Repository permissions:

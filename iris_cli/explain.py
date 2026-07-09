@@ -30,7 +30,7 @@ Your existing tests will pass without modification.
 
 To verify: run your test suite after adding IRIS.
 If any test fails, report it as a bug at:
-github.com/gimartinb/iris-sdk/issues"""
+github.com/IRIS-Security/iris-sdk/issues"""
 
 TECHNICAL_EXPLANATION = """\
 Proxy pattern (identical attribute forwarding):

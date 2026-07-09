@@ -86,6 +86,60 @@ def test_iris_hitl_reject_resolves_review(tmp_path, monkeypatch):
     assert queue.get("rev_reject01").status == HITLStatus.REJECTED
 
 
+def test_iris_hitl_rules_shows_declared_risk_tiers(monkeypatch, tmp_path):
+    gov = tmp_path / "governance" / "agents" / "tiered-agent"
+    gov.mkdir(parents=True)
+    gov.joinpath("passport.yaml").write_text(
+        """
+apiVersion: iris.io/v1alpha1
+kind: AgentPassport
+metadata:
+  name: tiered-agent
+  agent_id: agent-1
+spec:
+  owner: test@test.com
+  hitl:
+    enabled: true
+    timeout_seconds: 300
+    timeout_policy: deny
+    required_for_risk_levels: [CRITICAL]
+    step_up_actions: [write, delete]
+    sensitive_data_classifications: [phi]
+    step_up_on_intent_drift: true
+"""
+    )
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(hitl, ["rules", "--agent", "tiered-agent"])
+    assert result.exit_code == 0
+    assert "CRITICAL" in result.output
+    assert "write" in result.output and "delete" in result.output
+    assert "phi" in result.output
+    assert "intent" in result.output.lower()
+
+
+def test_iris_hitl_rules_shows_nothing_configured_by_default(monkeypatch, tmp_path):
+    gov = tmp_path / "governance" / "agents" / "plain-agent"
+    gov.mkdir(parents=True)
+    gov.joinpath("passport.yaml").write_text(
+        """
+apiVersion: iris.io/v1alpha1
+kind: AgentPassport
+metadata:
+  name: plain-agent
+  agent_id: agent-2
+spec:
+  owner: test@test.com
+"""
+    )
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(hitl, ["rules", "--agent", "plain-agent"])
+    assert result.exit_code == 0
+    assert "Risk level alone" in result.output
+    assert "Data classification alone" in result.output
+
+
 def test_iris_hitl_test_sends_test_notification(monkeypatch, tmp_path):
     gov = tmp_path / "governance" / "agents" / "demo-agent"
     gov.mkdir(parents=True)

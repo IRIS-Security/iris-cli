@@ -17,8 +17,8 @@ from rich.table import Table
 
 from iris.scan import detect_workload
 from iris_core.compliance.workload_eval import (
-    applicable_frameworks,
     evaluate_workload_profile,
+    framework_coverage,
     top_recommended_actions,
 )
 
@@ -119,12 +119,31 @@ def _print_profile(profile: dict) -> None:
 
 
 def _print_frameworks(profile: dict) -> None:
+    coverage = framework_coverage(profile)
     table = Table(title="Applicable frameworks", show_header=True, header_style="bold")
     table.add_column("Framework")
-    table.add_column("Triggered by")
-    for fw, reasons in applicable_frameworks(profile):
-        table.add_row(fw, ", ".join(reasons))
+    table.add_column("Why this applies to you")
+    table.add_column("Depth")
+    for entry in coverage:
+        depth = (
+            f"[yellow]mapped — thin[/yellow]"
+            if entry["thin"]
+            else f"{entry['rule_count']} rules"
+        )
+        table.add_row(entry["bundle_id"], entry["why"], depth)
     console.print(table)
+
+    thin = [entry for entry in coverage if entry["thin"]]
+    if thin:
+        console.print(
+            "[dim]Thin coverage means the registry has this framework mapped but "
+            "not yet deeply evaluated here — run one of the following for a real "
+            "control-by-control check:[/dim]"
+        )
+        for entry in thin:
+            console.print(
+                f"  [dim]•[/dim] iris compliance check --framework {entry['bundle_id']}"
+            )
 
 
 def _print_actions(obligations: list[dict]) -> None:

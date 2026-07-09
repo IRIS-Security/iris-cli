@@ -18,6 +18,7 @@ from rich.table import Table
 
 from iris_core.cost.pricing import DEFAULT_PRICING, overrides_path, PricingRegistry
 from iris_core.cost.tracker import CostSummary, CostTracker, discover_agent_trackers
+from iris_core.entitlements import Entitlements, Feature
 
 console = Console()
 
@@ -298,6 +299,7 @@ def cost_report(agent: Optional[str], days: int, output_format: str, since: Opti
 @click.option("--since", default=None, help="ISO date string for period start")
 def cost_summary(days: int, since: Optional[str]) -> None:
     """CFO report — cost across all agents sorted by spend."""
+    Entitlements().require(Feature.COST_ORG_SUMMARY, context="org-wide cost summary")
     since_iso = _since_from_date(since, days)
     trackers = discover_agent_trackers()
     if not trackers:

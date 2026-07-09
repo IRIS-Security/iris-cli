@@ -8,12 +8,14 @@ import click
 from rich.console import Console
 from rich.table import Table
 
+from iris_core.entitlements import Entitlements, Feature
+
 console = Console()
 
 
 @click.group()
 def users():
-    """Manage which users may invoke governed agents (PRO tier RBAC)."""
+    """Manage which users may invoke governed agents (Business tier RBAC beyond solo owner)."""
     pass
 
 
@@ -31,7 +33,11 @@ def users_add(email: str, role: str, agent: str, governance_dir: Path):
     Example:
       iris users add --email alice@co.com --role developer --agent my-agent
     """
-    from iris_core.rbac.registry import add_user
+    from iris_core.rbac.registry import add_user, load_users
+
+    existing = load_users(agent, governance_dir)
+    if existing:
+        Entitlements().require(Feature.TEAM_RBAC, context="add second+ user to agent")
 
     try:
         entry = add_user(agent, email, role, governance_dir)

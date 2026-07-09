@@ -19,6 +19,7 @@ Setup:
 
 import json
 import asyncio
+import re
 from pathlib import Path
 from typing import Any
 from datetime import datetime
@@ -142,6 +143,75 @@ MCP_TOOLS = [
 
 # ── Tool handlers ─────────────────────────────────────────────────────────────
 
+_MODEL_ID_PATTERN = re.compile(r"""model\s*=\s*["']([^"']+)["']""")
+
+
+def _governance_root(workspace: Path) -> Path | None:
+    candidate = workspace / "governance"
+    return candidate if candidate.exists() else None
+
+
+def _model_governance_violations(code: str, workspace: Path) -> list[dict]:
+    from iris_core.engine.model_governance import check_model_governance
+    from iris_core.models.context import EvaluationContext
+    from iris_core.models.directives import DirectiveRegistry
+    from iris_core.models.model_registry import ModelRegistry
+    from iris_core.models.passport import AgentPassport, Environment
+
+    model_ids = _MODEL_ID_PATTERN.findall(code)
+    if not model_ids:
+        return []
+
+    gov_root = _governance_root(workspace)
+    registry = ModelRegistry.load(gov_root)
+    directives = DirectiveRegistry.load(gov_root)
+    passport = AgentPassport(
+        name="mcp-scan",
+        owner="unknown@local",
+        allowed_model_tiers=["standard", "frontier", "frontier-restricted"],
+    )
+    violations: list[dict] = []
+    for model_id in model_ids:
+        ctx = EvaluationContext(
+            agent_id="mcp-scan",
+            action="call",
+            resource="llm-api",
+            resource_type="model",
+            environment=Environment.DEV,
+            model_id=model_id,
+        )
+        for violation in check_model_governance(passport, ctx, registry, directives):
+            violations.append(
+                {
+                    "rule_id": violation.rule_id,
+                    "severity": violation.severity.value,
+                    "message": violation.message,
+                    "compliance_refs": violation.compliance_refs,
+                    "fix": violation.remediation,
+                }
+            )
+    return violations
+
+
+def handle_models_status(params: dict) -> dict:
+    """Return bundled/user model registry and active directives."""
+    from iris_core.models.directives import DirectiveRegistry
+    from iris_core.models.model_registry import ModelRegistry
+
+    workspace = Path(params.get("workspace_path", "."))
+    gov_root = _governance_root(workspace)
+    registry = ModelRegistry.load(gov_root)
+    directives = DirectiveRegistry.load(gov_root)
+    return {
+        "models": {
+            model_id: capability.to_dict()
+            for model_id, capability in registry.models.items()
+        },
+        "active_directives": [d.to_dict() for d in directives.active_directives()],
+        "docs": "docs/MODEL_GOVERNANCE.md",
+    }
+
+
 def handle_check_agent_code(params: dict) -> dict:
     """
     Analyze agent code for compliance violations.
@@ -150,6 +220,7 @@ def handle_check_agent_code(params: dict) -> dict:
     code = params.get("code", "")
     file_path = params.get("file_path", "unknown")
     framework = params.get("framework", "colorado-ai-act")
+    workspace = Path(params.get("workspace_path", "."))
 
     violations = []
     suggestions = []
@@ -241,6 +312,8 @@ def handle_check_agent_code(params: dict) -> dict:
                 ),
                 "command": f"iris register --name my-agent --owner you@company.com --compliance colorado-ai-act",
             })
+
+    violations.extend(_model_governance_violations(code, workspace))
 
     return {
         "file": file_path,
@@ -386,6 +459,18 @@ agent = IrisAgent(
             "explanation": "Declare the destination region so IRIS can enforce cross-region policy",
             "code_snippet": "@agent.guard(tool=\"storage\", action=\"write\", data_region=\"us-east-1\", destination_region=\"us-east-1\")",
         },
+        "IRIS-MODEL-001": {
+            "explanation": "Model is suspended by an active directive — switch to the approved fallback",
+            "command": "Review governance/directives/active.yaml and use the fallback_model listed there",
+        },
+        "IRIS-MODEL-004": {
+            "explanation": "Export-control restricted model requires valid user work authorization",
+            "code_snippet": "Set user_work_authorization (e.g. us-citizen) in EvaluationContext or use an unrestricted model",
+        },
+        "IRIS-MODEL-005": {
+            "explanation": "Frontier model requires HITL approval in staging/production",
+            "code_snippet": "Set hitl_approved=True after security review, or use iris HITL workflow",
+        },
     }
 
     fix = fixes.get(rule_id, {
@@ -469,6 +554,7 @@ HANDLERS = {
     "iris_suggest_policy": handle_suggest_policy,
     "iris_fix_violation": handle_fix_violation,
     "iris_scan_workspace": handle_scan_workspace,
+    "iris_models_status": handle_models_status,
 }
 
 

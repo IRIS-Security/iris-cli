@@ -8,6 +8,8 @@ from click.testing import CliRunner
 from iris_cli.framework_test import _readiness_level
 from iris_cli.main import cli
 
+from vault_fixtures import recent_iso
+
 
 def _passport_yaml(
     *,
@@ -63,7 +65,7 @@ def _write_vault_events(home: Path, agent: str, count: int, *, hitl: int = 0) ->
         rows.append(
             {
                 "event_id": f"e{i}",
-                "timestamp": f"2026-06-0{(i % 9) + 1}T00:00:00",
+                "timestamp": recent_iso(days_ago=1, hour=(i % 12) + 1),
                 "agent_id": agent,
                 "action": "call",
                 "resource": "payments-api",

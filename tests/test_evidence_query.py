@@ -15,6 +15,8 @@ from click.testing import CliRunner
 from iris_cli.evidence import filter_query_events
 from iris_cli.main import cli
 
+from vault_fixtures import recent_date, recent_iso
+
 
 PASSPORT_YAML = """
 apiVersion: iris.io/v1alpha1
@@ -47,7 +49,7 @@ def _sample_events(agent: str) -> list:
     return [
         {
             "event_id": "e1",
-            "timestamp": "2026-05-28T10:00:00",
+            "timestamp": recent_iso(days_ago=1, hour=10),
             "agent_id": agent,
             "action": "call",
             "resource": "payments-api",
@@ -57,7 +59,7 @@ def _sample_events(agent: str) -> list:
         },
         {
             "event_id": "e2",
-            "timestamp": "2026-05-28T11:00:00",
+            "timestamp": recent_iso(days_ago=1, hour=11),
             "agent_id": agent,
             "action": "call",
             "resource": "unknown-tool",
@@ -74,7 +76,7 @@ def _sample_events(agent: str) -> list:
         },
         {
             "event_id": "e3",
-            "timestamp": "2026-05-28T12:00:00",
+            "timestamp": recent_iso(days_ago=1, hour=12),
             "agent_id": agent,
             "action": "write",
             "resource": "storage-api",

@@ -9,13 +9,14 @@ from iris_cli.mcp_server import (
 )
 
 
-def test_mcp_flags_restricted_model_without_work_authorization():
+def test_mcp_flags_restricted_model_without_work_authorization(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     code = """
 from iris_anthropic import IrisAnthropic
 client = IrisAnthropic(passport=passport)
 client.messages.create(model="claude-fable-5", messages=[])
 """
-    result = handle_check_agent_code({"code": code})
+    result = handle_check_agent_code({"code": code, "workspace_path": str(tmp_path)})
     rule_ids = [v["rule_id"] for v in result["violations"]]
     assert "IRIS-MODEL-004" in rule_ids
 

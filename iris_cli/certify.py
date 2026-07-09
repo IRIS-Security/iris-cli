@@ -404,11 +404,13 @@ def certify_cmd(
 
     loader = DynamicBundleLoader(pinned_version=registry_version)
 
+    machine_output = output_format in ("json", "markdown", "aiuc1-export")
     if not offline and not registry_version:
         if not loader.is_cache_fresh():
-            console.print("[dim]Checking for regulatory updates...[/dim]")
+            if not machine_output:
+                console.print("[dim]Checking for regulatory updates...[/dim]")
             updated = loader.refresh_registry()
-            if updated:
+            if updated and not machine_output:
                 console.print("[green]✓ Regulatory intelligence updated[/green]")
                 console.print("[dim]  Run: iris regulatory check for change summary[/dim]")
 

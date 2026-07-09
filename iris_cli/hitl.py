@@ -214,6 +214,35 @@ def hitl_setup(agent: str):
         rules.append(HITLConditionRule(condition=condition, reason=reason, notify_channel=channel))
     config.condition_rules = rules
 
+    console.print(
+        "\nRisk tiers — gate the clearly-irreversible, auto-allow the routine.\n"
+        "Leave any of these blank to skip; an empty list never triggers HITL.\n"
+    )
+    if click.confirm("Require HITL for specific violation severities?", default=False):
+        levels = click.prompt(
+            "Severities (comma-separated, e.g. CRITICAL,HIGH)", default="CRITICAL"
+        )
+        config.required_for_risk_levels = [
+            lvl.strip().upper() for lvl in levels.split(",") if lvl.strip()
+        ]
+    if click.confirm(
+        "Require HITL for specific actions in staging/production (e.g. write, delete)?",
+        default=False,
+    ):
+        actions = click.prompt("Actions (comma-separated)", default="write,delete")
+        config.step_up_actions = [a.strip() for a in actions.split(",") if a.strip()]
+    if click.confirm(
+        "Require HITL for specific data classifications (e.g. phi, pii)?", default=False
+    ):
+        classes = click.prompt("Data classifications (comma-separated)", default="phi,pii")
+        config.sensitive_data_classifications = [
+            c.strip() for c in classes.split(",") if c.strip()
+        ]
+    config.step_up_on_intent_drift = click.confirm(
+        "Require HITL when an action drifts outside the agent's declared intent?",
+        default=False,
+    )
+
     if click.confirm("Configure Slack webhook URL (Pro)?", default=False):
         config.slack_webhook_url = click.prompt("Slack webhook URL", default="")
     if click.confirm("Configure email recipients (Pro)?", default=False):
@@ -223,7 +252,15 @@ def hitl_setup(agent: str):
     path = _save_hitl_config(agent, config)
     console.print(f"[green]✓[/green] HITL configured for {agent}")
     console.print(f"[green]✓[/green] {len(rules)} condition rule(s) declared")
-    console.print("[green]✓[/green] HITL fires ONLY when a declared rule matches")
+    if config.required_for_risk_levels:
+        console.print(f"[green]✓[/green] Step-up on severities: {config.required_for_risk_levels}")
+    if config.step_up_actions:
+        console.print(f"[green]✓[/green] Step-up on actions: {config.step_up_actions}")
+    if config.sensitive_data_classifications:
+        console.print(f"[green]✓[/green] Step-up on data classifications: {config.sensitive_data_classifications}")
+    if config.step_up_on_intent_drift:
+        console.print("[green]✓[/green] Step-up on intent drift: enabled")
+    console.print("[green]✓[/green] HITL fires ONLY for what you declared above — everything else auto-allows")
     console.print(f"[green]✓[/green] Saved to {path}")
 
 
@@ -255,10 +292,38 @@ def hitl_rules(agent: str):
             console.print(f"  Reason: {entry['reason']}")
             console.print("  Channel: All channels")
 
+    if config.required_for_risk_levels:
+        console.print(
+            f"\nWILL trigger HITL — violation severity in "
+            f"{config.required_for_risk_levels}:"
+        )
+        console.print(
+            "● Any policy violation at these severities steps up instead of "
+            "logging silently or auto-denying"
+        )
+
+    if config.step_up_actions:
+        console.print(f"\nWILL trigger HITL — declared step-up actions in staging/production:")
+        console.print(f"● {config.step_up_actions}")
+
+    if config.sensitive_data_classifications:
+        console.print(
+            f"\nWILL trigger HITL — sensitive data classifications:"
+        )
+        console.print(f"● {config.sensitive_data_classifications}")
+
+    if config.step_up_on_intent_drift:
+        console.print(
+            "\nWILL trigger HITL — action drifts outside the agent's declared "
+            "intent (semantic distance > 0.7)"
+        )
+
     console.print("\nWILL NOT trigger HITL — everything else:")
     console.print("✗ Calls with no matching condition rule → automatic")
-    console.print("✗ Risk level alone → never triggers HITL")
-    console.print("✗ Data classification alone → never triggers HITL")
+    if not config.required_for_risk_levels:
+        console.print("✗ Risk level alone → never triggers HITL (declare required_for_risk_levels to change this)")
+    if not config.sensitive_data_classifications:
+        console.print("✗ Data classification alone → never triggers HITL (declare sensitive_data_classifications to change this)")
     console.print("\nRun: iris hitl test --agent {agent} to verify.")
 
 

@@ -167,7 +167,7 @@ def _print_welcome() -> None:
             "  · How to register and govern a new agent\n"
             "  · Your compliance score in real time\n\n"
             "No API key required for most steps.\n"
-            "github.com/gimartinb/iris-sdk",
+            "github.com/IRIS-Security/iris-sdk",
             title="Welcome to IRIS",
             style="blue",
         )
@@ -363,7 +363,7 @@ def _print_summary(findings_count: int) -> None:
             "     [cyan]from iris_anthropic import IrisAnthropic[/cyan]\n"
             "     [cyan]client = IrisAnthropic(passport=passport)[/cyan]\n\n"
             "  4. Read the full guide:\n"
-            "     github.com/gimartinb/iris-sdk/blob/main/QUICKSTART.md\n\n"
+            "     github.com/IRIS-Security/iris-sdk/blob/main/QUICKSTART.md\n\n"
             "Questions? gilbert.martin@gmail.com",
             title="Quickstart complete",
             style="green",
