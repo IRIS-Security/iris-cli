@@ -34,7 +34,8 @@ def _exit_on_fail_threshold(obligations: list[dict], fail_on: str) -> None:
     blocking = [
         obligation
         for obligation in obligations
-        if _SEVERITY_RANK.get(obligation.get("severity", "recommended"), 9) <= threshold
+        if not obligation.get("informational", False)
+        and _SEVERITY_RANK.get(obligation.get("severity", "recommended"), 9) <= threshold
     ]
     if blocking:
         sys.exit(1)
