@@ -19,11 +19,13 @@ from iris_cli.audit_log import (
 )
 from iris_cli.main import cli
 
+from vault_fixtures import recent_date, recent_iso
+
 
 def _sample_event(agent: str = "billing-agent") -> dict:
     return {
         "event_id": "ev_test_001",
-        "timestamp": "2026-06-01T10:00:00",
+        "timestamp": recent_iso(days_ago=3, hour=10),
         "agent_id": agent,
         "_agent": agent,
         "action": "GetSecretValue",
@@ -63,6 +65,8 @@ def test_audit_log_export_json(tmp_path, monkeypatch):
 
     out_file = tmp_path / "audit.json"
     runner = CliRunner()
+    since = recent_date(days_ago=7)
+    until = recent_date(days_ago=0)
     result = runner.invoke(
         cli,
         [
@@ -73,9 +77,9 @@ def test_audit_log_export_json(tmp_path, monkeypatch):
             "--agent",
             "billing-agent",
             "--since",
-            "2026-06-01",
+            since,
             "--until",
-            "2026-06-30",
+            until,
             "--output",
             str(out_file),
             "--vault-dir",

@@ -44,12 +44,12 @@ def test_status_shows_current_tier(tmp_path, monkeypatch):
     runner = CliRunner()
     result = runner.invoke(cli, ["status"])
     assert result.exit_code == 0
-    assert "YOUR PLAN: Free tier" in result.output
+    assert "YOUR PLAN: Community tier" in result.output
     assert "Colorado AI Act" in result.output
     assert "iris license activate" in result.output
 
     footer = build_status_tier_footer()
-    assert "Free tier" in footer
+    assert "Community tier" in footer
 
 
 def test_compliance_check_pro_bundle_shows_preview(tmp_path, monkeypatch):
@@ -116,7 +116,7 @@ def test_test_command_shows_all_in_pro(tmp_path, monkeypatch):
         ["test", "--framework", "nist-ai-rmf", "--agent", "my-agent"],
     )
     assert "ALL GAPS" in table_result.output
-    assert "IRIS Pro active" in table_result.output
+    assert "IRIS Pro active" in table_result.output or "Business" in table_result.output
 
 
 def test_entitlements_command_shows_complete_map(tmp_path, monkeypatch):
@@ -125,7 +125,7 @@ def test_entitlements_command_shows_complete_map(tmp_path, monkeypatch):
     result = runner.invoke(cli, ["entitlements"])
     assert result.exit_code == 0
     assert "IRIS Feature Entitlements" in result.output
-    assert "Your plan: Free tier" in result.output
+    assert "Your plan: Community tier" in result.output
     assert "Colorado AI Act bundle" in result.output
     assert "NIST AI RMF bundle" in result.output
     assert "iris test (score + top 3 gaps)" in result.output

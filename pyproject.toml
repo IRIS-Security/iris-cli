@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "iris-security-cli"
-version = "0.2.16"
+version = "0.2.17"
 description = "IRIS CLI — declare, compile, preview, enforce, witness, certify, sentinel"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -20,8 +20,8 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-  "iris-security-core>=0.1.16",
-  "iris-security-sdk>=0.2.16",
+  "iris-security-core>=0.1.17",
+  "iris-security-sdk>=0.2.17",
   "click>=8.1",
   "rich>=13.0",
   "pyyaml>=6.0",
@@ -31,8 +31,10 @@ dependencies = [
 scm = ["iris-security-scm[all]>=0.2.0"]
 
 [project.urls]
-Homepage = "https://github.com/gimartinb/iris-sdk"
-Repository = "https://github.com/gimartinb/iris-sdk"
+Homepage = "https://iris-security.github.io/iris-sdk/"
+Repository = "https://github.com/IRIS-Security/iris-sdk"
+Documentation = "https://iris-security.github.io/iris-sdk/cli-reference.html"
+Issues = "https://github.com/IRIS-Security/iris-sdk/issues"
 
 [project.scripts]
 iris = "iris_cli.main:cli"

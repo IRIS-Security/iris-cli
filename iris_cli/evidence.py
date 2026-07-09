@@ -1151,6 +1151,10 @@ def evidence_export(agent, output_path, output_format, governance_dir, vault_dir
         return
 
     if output_format == "oscal":
+        Entitlements().require(
+            Feature.EVIDENCE_EXPORT_AUDITOR,
+            context="evidence export --format oscal (auditor deliverable)",
+        )
         vault = _open_vault(agent, vault_dir)
         vault_data = vault.export_vault()
         oscal_payload = {

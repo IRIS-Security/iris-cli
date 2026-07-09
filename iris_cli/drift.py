@@ -254,6 +254,7 @@ def drift_alert_config(slack_webhook: Optional[str], email: Optional[str], webho
         _require_pro_license("Email drift alerts", Feature.DRIFT_EMAIL_ALERT)
         config["email"] = email
     if webhook:
+        _require_pro_license("Webhook drift alerts", Feature.DRIFT_WEBHOOK_ALERT)
         config["webhook"] = webhook
 
     if not any([slack_webhook, email, webhook]):

@@ -18,6 +18,8 @@ from iris_cli.evidence import (
 from iris_cli.main import cli
 from iris_core.evidence.vault import EvidenceVault
 
+from vault_fixtures import recent_date, recent_iso
+
 
 PASSPORT_YAML = """
 apiVersion: iris.io/v1alpha1
@@ -39,7 +41,15 @@ spec:
   is_high_risk_ai: true
   evidence_vault_id: IA-payment-agent-A3F2B1C4
   last_reviewed_at: '2026-05-20T07:28:24.684454'
-"""
+""".strip()
+
+
+def _passport_yaml() -> str:
+    reviewed = recent_iso(days_ago=5)
+    return PASSPORT_YAML.replace(
+        "last_reviewed_at: '2026-05-20T07:28:24.684454'",
+        f"last_reviewed_at: '{reviewed}'",
+    )
 
 
 def _write_vault(vault_root: Path, agent: str, events: list, assessments: list | None = None):
@@ -55,26 +65,12 @@ def _write_vault(vault_root: Path, agent: str, events: list, assessments: list |
 
 
 def _sample_events(agent: str) -> list:
-    return [
-        {
-            "event_id": "e1",
-            "timestamp": "2026-05-28T10:00:00",
-            "agent_id": agent,
-            "action": "call",
-            "resource": "payments-api",
-            "environment": "dev",
-            "decision": "PERMIT",
-            "violations": [],
-        },
-        {
-            "event_id": "e2",
-            "timestamp": "2026-05-28T11:00:00",
-            "agent_id": agent,
-            "action": "call",
-            "resource": "unknown-tool",
-            "environment": "dev",
-            "decision": "DENY",
-            "violations": [
+    hours = (10, 11, 12, 13)
+    decisions = ("PERMIT", "DENY", "DENY", "HITL")
+    payloads = [
+        ([],),
+        (
+            [
                 {
                     "rule_id": "IRIS-TOOL-001",
                     "severity": "HIGH",
@@ -82,16 +78,9 @@ def _sample_events(agent: str) -> list:
                     "compliance_refs": [],
                 }
             ],
-        },
-        {
-            "event_id": "e3",
-            "timestamp": "2026-05-28T12:00:00",
-            "agent_id": agent,
-            "action": "write",
-            "resource": "storage-api",
-            "environment": "staging",
-            "decision": "DENY",
-            "violations": [
+        ),
+        (
+            [
                 {
                     "rule_id": "IRIS-XR-001",
                     "severity": "CRITICAL",
@@ -99,25 +88,34 @@ def _sample_events(agent: str) -> list:
                     "compliance_refs": ["china-pipl"],
                 }
             ],
-        },
-        {
-            "event_id": "e4",
-            "timestamp": "2026-05-28T13:00:00",
-            "agent_id": agent,
-            "action": "approve",
-            "resource": "loan-decision",
-            "environment": "staging",
-            "decision": "HITL",
-            "violations": [],
-        },
+        ),
+        ([],),
     ]
+    actions = ("call", "call", "write", "approve")
+    resources = ("payments-api", "unknown-tool", "storage-api", "loan-decision")
+    environments = ("dev", "dev", "staging", "staging")
+    rows = []
+    for idx, hour in enumerate(hours, start=1):
+        rows.append(
+            {
+                "event_id": f"e{idx}",
+                "timestamp": recent_iso(days_ago=1, hour=hour),
+                "agent_id": agent,
+                "action": actions[idx - 1],
+                "resource": resources[idx - 1],
+                "environment": environments[idx - 1],
+                "decision": decisions[idx - 1],
+                "violations": payloads[idx - 1][0],
+            }
+        )
+    return rows
 
 
 @pytest.fixture
 def gov_dir(tmp_path):
     agent_dir = tmp_path / "governance" / "agents" / "payment-agent"
     agent_dir.mkdir(parents=True)
-    (agent_dir / "passport.yaml").write_text(PASSPORT_YAML)
+    (agent_dir / "passport.yaml").write_text(_passport_yaml())
     return tmp_path / "governance" / "agents"
 
 
@@ -134,7 +132,7 @@ def populated_vault(vault_root):
             "agent": "payment-agent",
             "risk_level": "MEDIUM",
             "assessed_by": "iris-platform",
-            "timestamp": "2026-05-20T07:28:24.684454",
+            "timestamp": recent_iso(days_ago=5),
             "findings_count": 2,
             "framework": "colorado-ai-act",
         }
@@ -164,7 +162,8 @@ def test_vault_summary_calculates_correctly(populated_vault):
     assert set(summary.environments_active) == {"dev", "staging"}
     assert summary.cross_region_blocks == 1
     assert summary.hitl_gates_triggered == 1
-    assert summary.last_assessment_date.startswith("2026-05-20")
+    assert summary.last_assessment_date is not None
+    assert summary.last_assessment_date.startswith(recent_iso(days_ago=5)[:10])
 
 
 def test_report_includes_all_sections(gov_dir, populated_vault):
