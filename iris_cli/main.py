@@ -50,7 +50,7 @@ class IrisCLI(click.Group):
 
 @click.group(cls=IrisCLI)
 @click.version_option(
-    version="0.2.17",
+    version="0.2.18",
     prog_name="iris",
     message="%(prog)s %(version)s · Evaluates agent actions through an in-process "
             "Cedar engine before adapter-wrapped calls proceed; records decisions "
