@@ -48,6 +48,7 @@ def _resolve_profile(
     litellm_config: str | None,
     litellm_proxy: str | None,
     lookback_days: int,
+    agt_audit_file: str | None,
 ) -> dict:
     if scan_source is None:
         return detect_workload(path)
@@ -83,6 +84,22 @@ def _resolve_profile(
             "LiteLLM source requires --config <litellm.config.yaml> or --proxy <base_url>"
         )
 
+    if scan_source == "agt":
+        try:
+            from iris_agt import profile_from_agt
+        except ImportError as exc:
+            raise click.ClickException(
+                "iris-agt is not installed. Run: pip install iris-agt"
+            ) from exc
+        if not agt_audit_file:
+            raise click.ClickException(
+                "AGT source requires --audit-file <audit_trail.jsonl>"
+            )
+        try:
+            return profile_from_agt(agt_audit_file)
+        except (FileNotFoundError, ValueError) as exc:
+            raise click.ClickException(str(exc)) from exc
+
     raise click.ClickException(f"Unknown scan source: {scan_source}")
 
 
@@ -91,6 +108,8 @@ def _scan_subtitle(scan_source: str | None) -> str:
         return "Langfuse trace metadata — no prompt content read."
     if scan_source == "litellm":
         return "LiteLLM config/proxy — models and providers inferred."
+    if scan_source == "agt":
+        return "Microsoft AGT audit trail — no tool-call content read."
     return "Offline detection — no network calls required."
 
 
@@ -194,13 +213,14 @@ def _push_profile(profile: dict) -> None:
 @click.option(
     "--from",
     "scan_source",
-    type=click.Choice(["langfuse", "litellm"], case_sensitive=False),
+    type=click.Choice(["langfuse", "litellm", "agt"], case_sensitive=False),
     default=None,
     help="Observability source instead of local code scan",
 )
 @click.option("--config", "litellm_config", type=click.Path(exists=True), help="LiteLLM config.yaml")
 @click.option("--proxy", "litellm_proxy", help="LiteLLM proxy base URL")
 @click.option("--lookback-days", default=30, show_default=True, help="Langfuse lookback window")
+@click.option("--audit-file", "agt_audit_file", type=click.Path(exists=True), help="AGT audit_trail.jsonl export")
 @click.option("--push", is_flag=True, help="POST profile to cloud when IRIS_API_KEY is set")
 @click.option(
     "--fail-on",
@@ -216,6 +236,7 @@ def compliance_scan_cmd(
     litellm_config: str | None,
     litellm_proxy: str | None,
     lookback_days: int,
+    agt_audit_file: str | None,
     push: bool,
     fail_on: str,
     as_json: bool,
@@ -231,6 +252,7 @@ def compliance_scan_cmd(
         litellm_config=litellm_config,
         litellm_proxy=litellm_proxy,
         lookback_days=lookback_days,
+        agt_audit_file=agt_audit_file,
     )
     obligations = evaluate_workload_profile(profile)
 
