@@ -7,6 +7,8 @@
 
 from __future__ import annotations
 
+import dataclasses
+import os
 import sys
 from pathlib import Path
 from typing import Optional
@@ -18,7 +20,7 @@ from rich.table import Table
 from iris import AgentPassport
 from iris_core.compliance.framework_check import load_bundle_data, run_framework_check
 from iris_core.compliance.results import ComplianceCheckStatus
-from iris_core.compliance.full_eval import render_full_eval_text, run_full_eval
+from iris_core.compliance.full_eval import FullEvalResult, render_full_eval_text, run_full_eval
 from iris_core.entitlements import Entitlements, Feature
 
 from iris_cli.compliance_fix import offer_remediation, recheck_after_fixes
@@ -30,6 +32,7 @@ console = Console()
 _FULL_EVAL_FRAMEWORKS = frozenset({
     "aiuc-1", "aarm-core", "aarm-extended", "soc2-cc",
     "hipaa", "soc2", "nist-ai-rmf", "gdpr", "fedramp-moderate",
+    "colorado-ai-act", "colorado-ai-act-original",
 })
 
 
@@ -150,6 +153,34 @@ def _render_result(
     return not has_failures
 
 
+def _push_full_eval(result: FullEvalResult) -> None:
+    api_key = os.environ.get("IRIS_API_KEY") or os.environ.get("IRIS_CLOUD_API_KEY")
+    base_url = os.environ.get("IRIS_API_URL", "http://localhost:8000")
+    if not api_key:
+        console.print("[yellow]Set IRIS_API_KEY to push full-eval result to cloud.[/yellow]")
+        return
+    import httpx
+
+    payload = {
+        "agent_name": result.agent_name,
+        "framework": result.framework,
+        "control_results": [dataclasses.asdict(c) for c in result.control_results],
+        "gap_summary": result.gap_summary,
+        "ranked_actions": result.ranked_actions,
+        "estimated_closure": result.estimated_closure,
+    }
+    response = httpx.post(
+        f"{base_url.rstrip('/')}/intelligence/full-eval/push",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        console.print(f"[red]Push failed ({response.status_code}): {response.text}[/red]")
+        return
+    console.print("[green]Full-eval result pushed to IRIS Cloud.[/green]")
+
+
 @click.command("check")
 @click.option("--agent", default=None, help="Specific agent to check (or all)")
 @click.option("--framework", "-f", default="colorado-ai-act")
@@ -175,6 +206,11 @@ def _render_result(
     is_flag=True,
     help="Full evaluation: control-by-control evidence mapping and gap analysis",
 )
+@click.option(
+    "--push",
+    is_flag=True,
+    help="POST full-eval result to IRIS Cloud when IRIS_API_KEY is set (requires --full)",
+)
 def compliance_check_cmd(
     agent: Optional[str],
     framework: str,
@@ -183,6 +219,7 @@ def compliance_check_cmd(
     yes: bool,
     no_fix: bool,
     full: bool,
+    push: bool,
 ) -> None:
     """
     Check an agent against a compliance framework.
@@ -196,7 +233,11 @@ def compliance_check_cmd(
       iris compliance check --agent payment-agent --framework hipaa
       iris compliance check --agent payment-agent --framework hipaa --fix -y
       iris compliance check --agent payment-agent --framework aiuc-1 --full
+      iris compliance check --agent payment-agent --framework colorado-ai-act --full --push
     """
+    if push and not full:
+        raise click.ClickException("--push requires --full")
+
     if full:
         Entitlements().require(
             Feature.CLI_TEST_FULL_REPORT,
@@ -225,9 +266,15 @@ def compliance_check_cmd(
                     governance_dir=gov_dir,
                 )
                 console.print(render_full_eval_text(full_result))
+                if push:
+                    _push_full_eval(full_result)
             except PermissionError as exc:
                 console.print(f"[yellow]{exc}[/yellow]")
                 sys.exit(1)
+        elif push:
+            console.print(
+                f"[yellow]--push skipped: {framework} is not a full-eval framework.[/yellow]"
+            )
 
         if offer_fixes:
             applied = offer_remediation(
