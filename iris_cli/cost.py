@@ -269,6 +269,16 @@ def cost_report(agent: Optional[str], days: int, output_format: str, since: Opti
                 "cost_by_model": s.cost_by_model,
                 "cost_by_tool": s.cost_by_tool,
                 "cost_trend": s.cost_trend,
+                "anomalies": [
+                    {
+                        "type": a.type,
+                        "description": a.description,
+                        "tool_name": a.call.tool_name,
+                        "cost_usd": a.call.cost_usd,
+                        "threshold_usd": a.threshold_usd,
+                    }
+                    for a in s.anomalies
+                ],
             }
             for s in summaries
         ]
