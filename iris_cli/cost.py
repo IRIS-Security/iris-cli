@@ -230,6 +230,36 @@ def _suggest_optimizations(summary: CostSummary, since: str) -> List[str]:
     return suggestions
 
 
+def _push_cost_summary(summary: CostSummary) -> None:
+    import os
+
+    api_key = os.environ.get("IRIS_API_KEY") or os.environ.get("IRIS_CLOUD_API_KEY")
+    base_url = os.environ.get("IRIS_API_URL", "http://localhost:8000")
+    if not api_key:
+        console.print("[yellow]Set IRIS_API_KEY to push cost attribution to cloud.[/yellow]")
+        return
+    import httpx
+
+    payload = {
+        "agent_id": summary.agent_id,
+        "agent_name": summary.agent_name,
+        "period_start": summary.period_start,
+        "period_end": summary.period_end,
+        "cost_usd": summary.total_cost_usd,
+        "total_calls": summary.total_calls,
+    }
+    response = httpx.post(
+        f"{base_url.rstrip('/')}/cost/push",
+        headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+        json=payload,
+        timeout=30,
+    )
+    if response.status_code >= 400:
+        console.print(f"[red]Push failed ({response.status_code}): {response.text}[/red]")
+        return
+    console.print("[green]Cost attribution pushed to IRIS Cloud.[/green]")
+
+
 def load_alert_config() -> dict:
     if not ALERTS_PATH.exists():
         return {}
@@ -252,11 +282,18 @@ def cost():
 @click.option("--days", default=30, type=int, help="Report period in days")
 @click.option("--format", "output_format", default="table", type=click.Choice(["table", "json", "csv"]))
 @click.option("--since", default=None, help="ISO date string for period start")
-def cost_report(agent: Optional[str], days: int, output_format: str, since: Optional[str]) -> None:
+@click.option("--push", is_flag=True, help="POST cost attribution to IRIS Cloud when IRIS_API_KEY is set")
+def cost_report(
+    agent: Optional[str], days: int, output_format: str, since: Optional[str], push: bool
+) -> None:
     """Show a detailed cost report for one or all agents."""
     since_iso = _since_from_date(since, days)
     trackers = _resolve_trackers(agent)
     summaries = [t.get_summary(since=since_iso) for t in trackers]
+
+    if push:
+        for summary in summaries:
+            _push_cost_summary(summary)
 
     if output_format == "json":
         payload = [

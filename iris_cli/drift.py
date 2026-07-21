@@ -44,6 +44,10 @@ def _render_check_table(report: DriftReport) -> None:
         table.add_row("[red]NEW[/red]", event.agent_name, f"{event.rule_id}: {event.description}")
     for event in report.resolved_violations:
         table.add_row("[green]RESOLVED[/green]", event.agent_name, f"{event.rule_id}: {event.description}")
+    for event in report.new_cost_anomalies:
+        table.add_row("[red]COST[/red]", event.agent_name, f"{event.severity}: {event.description}")
+    for event in report.resolved_cost_anomalies:
+        table.add_row("[green]COST RESOLVED[/green]", event.agent_name, f"{event.severity}: {event.description}")
     for change in report.score_changes:
         if change.direction == "degraded":
             style = "[red]SCORE ↓[/red]"
@@ -61,7 +65,13 @@ def _render_check_table(report: DriftReport) -> None:
         for name in report.production_ready_lost:
             table.add_row("[red]NOT READY[/red]", name, "was production-ready")
 
-    if not report.new_violations and not report.resolved_violations and not report.score_changes:
+    if (
+        not report.new_violations
+        and not report.resolved_violations
+        and not report.score_changes
+        and not report.new_cost_anomalies
+        and not report.resolved_cost_anomalies
+    ):
         table.add_row("[dim]—[/dim]", "—", "[dim]No changes[/dim]")
 
     console.print(table)
