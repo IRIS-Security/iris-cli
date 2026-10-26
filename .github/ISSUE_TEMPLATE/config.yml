@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/IRIS-Security/iris-cli/security/advisories/new
+    about: Please report security issues privately — do not open a public issue. See SECURITY.md.
+  - name: Documentation & guides
+    url: https://iris-security.github.io/iris-sdk/
+    about: Check the docs site before filing — your question may already be answered.

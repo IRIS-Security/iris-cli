@@ -85,6 +85,7 @@ def cli():
         export    Export for auditors (JSON, CSV, AIUC-1, OTel)
         stats     Aggregate stats across all agents
       cost        Token cost tracking per agent, tool, and model
+      trust       Local trust-state visibility (observation-only)
 
     Intelligence:
       framework   Get an opinionated compliance action plan
@@ -557,6 +558,12 @@ cli.add_command(users)
 
 from iris_cli.cost import cost
 cli.add_command(cost)
+
+from iris_cli.devspend import devspend
+cli.add_command(devspend)
+
+from iris_cli.trust import trust
+cli.add_command(trust)
 
 from iris_cli.models_cmd import models
 cli.add_command(models)

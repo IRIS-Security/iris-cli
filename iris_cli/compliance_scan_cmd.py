@@ -100,6 +100,23 @@ def _resolve_profile(
         except (FileNotFoundError, ValueError) as exc:
             raise click.ClickException(str(exc)) from exc
 
+    if scan_source == "openrouter":
+        try:
+            from iris_openrouter import (
+                ManagementKeyError,
+                OpenRouterActivityError,
+                profile_from_openrouter,
+            )
+        except ImportError as exc:
+            raise click.ClickException(
+                'iris-openrouter is not installed. Run: '
+                'pip install "git+https://github.com/IRIS-Security/iris-sdk.git#subdirectory=packages/iris-openrouter"'
+            ) from exc
+        try:
+            return profile_from_openrouter()
+        except (ManagementKeyError, OpenRouterActivityError) as exc:
+            raise click.ClickException(str(exc)) from exc
+
     raise click.ClickException(f"Unknown scan source: {scan_source}")
 
 
@@ -110,6 +127,11 @@ def _scan_subtitle(scan_source: str | None) -> str:
         return "LiteLLM config/proxy — models and providers inferred."
     if scan_source == "agt":
         return "Microsoft AGT audit trail — no tool-call content read."
+    if scan_source == "openrouter":
+        return (
+            "OpenRouter activity — live call to openrouter.ai/api/v1/activity "
+            "(Management API key, OPENROUTER_MANAGEMENT_KEY)."
+        )
     return "Offline detection — no network calls required."
 
 
@@ -213,7 +235,7 @@ def _push_profile(profile: dict) -> None:
 @click.option(
     "--from",
     "scan_source",
-    type=click.Choice(["langfuse", "litellm", "agt"], case_sensitive=False),
+    type=click.Choice(["langfuse", "litellm", "agt", "openrouter"], case_sensitive=False),
     default=None,
     help="Observability source instead of local code scan",
 )
@@ -241,7 +263,11 @@ def compliance_scan_cmd(
     fail_on: str,
     as_json: bool,
 ) -> None:
-    """Detect workload attributes and evaluate local regulatory obligations (offline)."""
+    """Detect workload attributes and evaluate local regulatory obligations.
+
+    The default local code scan is offline. --from langfuse, --from litellm
+    --proxy, and --from openrouter query those services over the network.
+    """
     root = Path(path).resolve()
     if scan_source is None and not root.exists():
         raise click.ClickException(f"Path not found: {root}")

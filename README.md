@@ -39,6 +39,12 @@ IRIS's own public repos run this check on every pull request.
 Scale to team-wide governance, centralized evidence, and enterprise
 SSO with IRIS Cloud → [iris-security.io](https://iris-security.io)
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for dev setup, tests, and the
+OSS/Cloud scope boundary. Please read
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) too.
+
 ## License
 
 Apache 2.0 — see LICENSE.

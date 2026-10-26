@@ -65,12 +65,17 @@ def _render_check_table(report: DriftReport) -> None:
         for name in report.production_ready_lost:
             table.add_row("[red]NOT READY[/red]", name, "was production-ready")
 
+    if report.trust_downgraded:
+        for name in report.trust_downgraded:
+            table.add_row("[red]TRUST ↓[/red]", name, "trust state downgraded")
+
     if (
         not report.new_violations
         and not report.resolved_violations
         and not report.score_changes
         and not report.new_cost_anomalies
         and not report.resolved_cost_anomalies
+        and not report.trust_downgraded
     ):
         table.add_row("[dim]—[/dim]", "—", "[dim]No changes[/dim]")
 

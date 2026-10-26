@@ -67,7 +67,7 @@ def test_compliance_check_pro_bundle_shows_upgrade(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     _write_agent(tmp_path)
     runner = CliRunner()
-    result = runner.invoke(cli, ["compliance", "check", "--framework", "hipaa"])
+    result = runner.invoke(cli, ["compliance", "check", "--framework", "nist-ai-rmf"])
     assert "iris license activate" in result.output
     assert "https://iris.ai/pricing" in result.output
     assert "controls available with Pro license" in result.output
