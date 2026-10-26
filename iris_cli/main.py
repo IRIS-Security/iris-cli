@@ -50,7 +50,7 @@ class IrisCLI(click.Group):
 
 @click.group(cls=IrisCLI)
 @click.version_option(
-    version="0.2.19",
+    version="0.3.0",
     prog_name="iris",
     message="%(prog)s %(version)s · Evaluates agent actions through an in-process "
             "Cedar engine before adapter-wrapped calls proceed; records decisions "
@@ -337,7 +337,9 @@ def policy():
     help="Any LiteLLM model string e.g. ollama/llama3.2, bedrock/claude-3-5-sonnet",
 )
 @click.option("--model", default=None, help="Model name override for the chosen backend.")
-def policy_compile(agent, intent, governance_dir, dry_run, backend, litellm_model, model):
+@click.option("--from-passport", is_flag=True,
+              help="No LLM: generate a baseline policy permitting exactly the passport's declared tools and actions")
+def policy_compile(agent, intent, governance_dir, dry_run, backend, litellm_model, model, from_passport=False):
     """
     Compile policy-intent.md to Cedar using any LLM.
 
@@ -363,6 +365,22 @@ def policy_compile(agent, intent, governance_dir, dry_run, backend, litellm_mode
         console.print(f"[red]Passport not found: {passport_file}[/red]")
         console.print(f"Run: iris register --name {agent}")
         sys.exit(1)
+
+    if from_passport:
+        from iris_core.engine.compiler import generate_baseline_cedar
+
+        passport = AgentPassport.from_yaml(passport_file.read_text())
+        cedar = generate_baseline_cedar(passport)
+        if dry_run:
+            console.print(cedar)
+            return
+        (gov_dir / "policy.cedar").write_text(cedar)
+        declared = sum(1 for _ in passport.tool_permissions)
+        console.print(f"[bold green]✓ Baseline policy written: {gov_dir / 'policy.cedar'}[/bold green]")
+        console.print(f"[dim]{declared} declared tool(s); no LLM used. Undeclared tools and actions are blocked.[/dim]")
+        if not declared:
+            console.print("[yellow]No tool_permissions in passport.yaml yet, so every tool call will be blocked.[/yellow]")
+        return
 
     if not intent_file.exists():
         console.print(f"[red]Intent file not found: {intent_file}[/red]")
@@ -440,8 +458,10 @@ cli.add_command(preview)
     help="Any LiteLLM model string e.g. ollama/llama3.2, bedrock/claude-3-5-sonnet",
 )
 @click.option("--model", default=None, help="Model name override for the chosen backend.")
+@click.option("--from-passport", is_flag=True,
+              help="No LLM: generate a baseline policy permitting exactly the passport's declared tools and actions")
 @timed_cli_command("iris compile")
-def compile_cmd(agent, intent, governance_dir, dry_run, backend, litellm_model, model):
+def compile_cmd(agent, intent, governance_dir, dry_run, backend, litellm_model, model, from_passport):
     """Compile policy-intent.md to Cedar (alias: iris policy compile)."""
     ctx = click.get_current_context()
     ctx.invoke(
@@ -453,6 +473,7 @@ def compile_cmd(agent, intent, governance_dir, dry_run, backend, litellm_model, 
         backend=backend,
         litellm_model=litellm_model,
         model=model,
+        from_passport=from_passport,
     )
 
 
@@ -553,14 +574,21 @@ cli.add_command(drift)
 from iris_cli.redteam import red_team
 cli.add_command(red_team)
 
+from iris_cli.assessment_cmd import threat_model_cmd, engagement_report_cmd
+cli.add_command(threat_model_cmd, name="threat-model")
+cli.add_command(engagement_report_cmd, name="engagement-report")
+
+from iris_cli.detect_cmd import detect
+cli.add_command(detect)
+
+from iris_cli.supply_chain_cmd import supply_chain
+cli.add_command(supply_chain)
+
 from iris_cli.users import users
 cli.add_command(users)
 
 from iris_cli.cost import cost
 cli.add_command(cost)
-
-from iris_cli.devspend import devspend
-cli.add_command(devspend)
 
 from iris_cli.trust import trust
 cli.add_command(trust)

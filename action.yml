@@ -1,23 +1,50 @@
 # Copyright 2024-2025 Gilbert Martin / IRIS Security, Inc.
-# Composite GitHub Action — wraps the OSS iris-security-cli (offline by default).
-name: IRIS AI Governance
+# Composite GitHub Action that wraps the OSS iris-security-cli (offline by default).
+name: IRIS Agent Flight Recorder
 description: >-
-  Scan a repo for AI compliance obligations and validate policies with IRIS.
-  Runs the OSS iris CLI locally — no cloud account required. Optional cloud
-  push when api-key is set.
+  Find every AI agent and AI call in your repo, flag ungoverned calls and AI
+  supply chain risks, and threat model each agent against the OWASP LLM and
+  Agentic Top 10. Runs offline with the open source IRIS CLI.
+author: IRIS Security
 branding:
   icon: shield
-  color: blue
+  color: red
+
+outputs:
+  high:
+    description: High severity findings (flight-recorder)
+    value: ${{ steps.iris.outputs.high }}
+  medium:
+    description: Medium severity findings (flight-recorder)
+    value: ${{ steps.iris.outputs.medium }}
+  ungoverned:
+    description: AI calls not governed by IRIS (flight-recorder)
+    value: ${{ steps.iris.outputs.ungoverned }}
 
 inputs:
   command:
-    description: 'IRIS command to run ("compliance scan" or "policy validate")'
+    description: 'What to run: "flight-recorder" (agents, ungoverned AI, supply chain, threat model), "compliance scan", or "policy validate"'
     required: false
-    default: compliance scan
+    default: flight-recorder
   fail-on:
-    description: Fail threshold for compliance scan (blocker, required, or none)
+    description: >-
+      When to fail the job. flight-recorder takes none, medium, or high
+      (blocker means high, required means medium). compliance scan takes
+      blocker, required, or none.
     required: false
-    default: blocker
+    default: none
+  license-key:
+    description: Optional IRIS license key; adds the full threat model report with recommendations
+    required: false
+    default: ""
+  iris-version:
+    description: pip version specifier for iris-security-cli
+    required: false
+    default: ">=0.3.0"
+  install:
+    description: Set to "false" when the job already installed the IRIS CLI (for example from source)
+    required: false
+    default: "true"
   api-key:
     description: Optional IRIS Cloud API key — enables --push on compliance scan
     required: false
@@ -36,17 +63,24 @@ runs:
         python-version: "3.12"
 
     - name: Install IRIS CLI
+      if: inputs.install != 'false'
       shell: bash
       run: |
-        pip install "iris-security-core>=0.1.17" "iris-security-sdk>=0.2.17" "iris-security-cli>=0.2.17"
+        python -m pip install --quiet "iris-security-cli${IRIS_VERSION}"
+      env:
+        IRIS_VERSION: ${{ inputs.iris-version }}
 
-    - name: Run IRIS governance check
+    - name: Run IRIS
+      id: iris
       shell: bash
       working-directory: ${{ inputs.working-directory }}
       env:
         IRIS_API_KEY: ${{ inputs.api-key }}
         IRIS_COMMAND: ${{ inputs.command }}
         IRIS_FAIL_ON: ${{ inputs.fail-on }}
+        IRIS_LICENSE_KEY: ${{ inputs.license-key }}
+        IRIS_ACTION_PATH: ${{ github.action_path }}
+        COLUMNS: "140"
       run: |
         set -euo pipefail
 
@@ -56,6 +90,26 @@ runs:
         fi
 
         case "${IRIS_COMMAND}" in
+          "flight-recorder")
+            out="${RUNNER_TEMP:-/tmp}/iris-flight-recorder"
+            mkdir -p "$out"
+            iris scan --discover --dir . --format json > "$out/scan.json" || true
+            iris supply-chain --dir . --format json > "$out/supply.json" || true
+            if [ -d governance/agents ]; then
+              if [ -n "${IRIS_LICENSE_KEY:-}" ]; then
+                iris threat-model --format md > "$out/threat-model.md" 2>/dev/null || true
+              fi
+              if [ ! -s "$out/threat-model.md" ]; then
+                iris threat-model 2>/dev/null | grep -v "^Full report" > "$out/threat-model.txt" || true
+              fi
+            fi
+            case "${IRIS_FAIL_ON}" in
+              blocker|high) threshold=high ;;
+              required|medium) threshold=medium ;;
+              *) threshold=none ;;
+            esac
+            python3 "${IRIS_ACTION_PATH}/action/flight_recorder_summary.py" "$out" "$threshold"
+            ;;
           "compliance scan")
             if iris compliance scan --help 2>&1 | grep -q -- '--fail-on'; then
               iris compliance scan --path . --json --fail-on "${IRIS_FAIL_ON}" "${push_flag[@]}"
@@ -69,7 +123,7 @@ runs:
             ;;
           *)
             echo "Unknown command: ${IRIS_COMMAND}" >&2
-            echo 'Supported: "compliance scan", "policy validate"' >&2
+            echo 'Supported: "flight-recorder", "compliance scan", "policy validate"' >&2
             exit 1
             ;;
         esac

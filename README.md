@@ -11,26 +11,27 @@ iris org-policy validate
 
 Full documentation: **https://iris-security.github.io/iris-sdk/cli-reference.html**
 
-## GitHub Action
+## GitHub Action: IRIS Agent Flight Recorder
 
-Add AI governance to any repo's CI with the composite Action in this
-repository (offline/OSS by default — no cloud account required):
+Put a flight recorder on every pull request. The Action in this repository
+finds AI agents and AI calls IRIS does not govern, flags AI supply chain
+risks, and threat models each agent against the OWASP LLM and Agentic
+Top 10. It runs offline with the open source CLI; no account required.
 
 ```yaml
+- uses: actions/checkout@v4
 - uses: IRIS-Security/iris-cli@v1
   with:
-    command: compliance scan
-    fail-on: blocker
+    fail-on: high
 ```
 
-Optional cloud push (requires IRIS Cloud API key + entitlement):
+The earlier compliance check is still available:
 
 ```yaml
 - uses: IRIS-Security/iris-cli@v1
   with:
     command: compliance scan
     fail-on: blocker
-    api-key: ${{ secrets.IRIS_API_KEY }}
 ```
 
 See **https://iris-security.github.io/iris-sdk/github-action.html** for inputs and fail-on thresholds.

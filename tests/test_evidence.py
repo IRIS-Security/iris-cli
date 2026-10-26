@@ -176,7 +176,8 @@ def test_report_includes_all_sections(gov_dir, populated_vault):
     markdown = format_report_markdown(data)
     required_sections = [
         "## Agent Identity",
-        "## Compliance Status",
+        "## Signed Evidence and Control Coverage",
+        "## Colorado AI Act Status",
         "## Evaluation Statistics",
         "## Top Violations",
         "## Impact Assessment History",
@@ -293,3 +294,14 @@ def test_annual_review_deadline_calculated(gov_dir, populated_vault):
 
     data_overdue = build_report_data("payment-agent", passport, vault)
     assert data_overdue["annual_review"]["status"] == "OVERDUE"
+
+
+def test_report_hides_colorado_status_for_non_colorado_agent(gov_dir, populated_vault):
+    from iris_core.models.passport import AgentPassport, ComplianceTag
+
+    passport = AgentPassport.from_yaml((gov_dir / "payment-agent" / "passport.yaml").read_text())
+    passport.compliance_tags = [ComplianceTag("soc2")]
+    vault = EvidenceVault(agent_id="payment-agent", vault_dir=populated_vault)
+    markdown = format_report_markdown(build_report_data("payment-agent", passport, vault))
+    assert "Colorado AI Act Status" not in markdown
+    assert "Upgrade to IRIS Pro" not in markdown

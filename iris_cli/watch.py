@@ -54,7 +54,9 @@ def _color_line(line: str) -> str:
 def watch_cmd(agent: str, tail: int, vault_dir: Path | None) -> None:
     """Live feed of IRIS policy decisions (tail -f for your agent)."""
     vault_root = vault_dir or Path.home() / ".iris" / "evidence"
-    events_file = vault_root / agent / "events.jsonl"
+    from iris_core.evidence.locate import resolve_vault_id
+
+    events_file = vault_root / resolve_vault_id(agent, None, vault_root) / "events.jsonl"
 
     if not events_file.exists():
         events_file.parent.mkdir(parents=True, exist_ok=True)

@@ -74,7 +74,9 @@ def _load_agents(
         agent_name = passport.name or agent_dir.name
         governed = (agent_dir / "policy.cedar").exists()
 
-        vault = EvidenceVault(agent_id=agent_name, vault_dir=vault_root)
+        from iris_core.evidence.locate import vault_id_for_passport
+
+        vault = EvidenceVault(agent_id=vault_id_for_passport(passport, agent_name, vault_root), vault_dir=vault_root)
         last_reviewed = (
             passport.last_reviewed_at.isoformat() if passport.last_reviewed_at else None
         )

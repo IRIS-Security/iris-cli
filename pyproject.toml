@@ -1,10 +1,10 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=83", "wheel>=0.46.2"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "iris-security-cli"
-version = "0.2.19"
+version = "0.3.0"
 description = "IRIS CLI — declare, compile, preview, enforce, witness, certify, sentinel"
 readme = "README.md"
 license = { text = "Apache-2.0" }
@@ -20,8 +20,8 @@ classifiers = [
   "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-  "iris-security-core>=0.1.18",
-  "iris-security-sdk>=0.2.19",
+  "iris-security-core>=0.2.0",
+  "iris-security-sdk>=0.3.0",
   "click>=8.1",
   "rich>=13.0",
   "pyyaml>=6.0",
@@ -41,4 +41,4 @@ iris = "iris_cli.main:cli"
 
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["tools*", "demo*", "docs*"]
+exclude = ["tools*", "demo*", "docs*", "action*"]

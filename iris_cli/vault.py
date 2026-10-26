@@ -167,7 +167,9 @@ def vault_redact(agent, user_id, confirm, dry_run, governance_dir, vault_dir):
         )
         raise SystemExit(1)
 
-    vault = EvidenceVault(agent_id=agent, vault_dir=vault_dir)
+    from iris_core.evidence.locate import resolve_vault_id
+
+    vault = EvidenceVault(agent_id=resolve_vault_id(agent, governance_dir, vault_dir), vault_dir=vault_dir)
     events = _load_events(vault)
     date_str = datetime.utcnow().strftime("%Y-%m-%d")
     marker = _redaction_marker(user_id, date_str)

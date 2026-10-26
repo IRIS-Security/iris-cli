@@ -96,13 +96,25 @@ def hitl_list(agent: Optional[str], status: str):
     table.add_column("Expires")
     for review in reviews:
         table.add_row(
-            review.review_id[:14],
+            review.review_id,
             review.agent_name[:20],
             review.risk_level,
             f"{review.tool_name[:12]}-{review.action[:8]}",
             _time_remaining(review.expires_at),
         )
     console.print(table)
+
+
+def _full_id(queue: HITLQueue, review_id: str) -> str:
+    """Accept a full review ID or a unique prefix; fail with a clear message otherwise."""
+    if queue.get(review_id) is not None:
+        return review_id
+    ids = {e.get("review_id") for e in queue._read_all() if str(e.get("review_id", "")).startswith(review_id)}
+    if len(ids) == 1:
+        return ids.pop()
+    if not ids:
+        raise click.ClickException(f"Review not found: {review_id}. Run `iris hitl list` for open reviews.")
+    raise click.ClickException(f"Review ID {review_id} is ambiguous: {', '.join(sorted(ids))}")
 
 
 @hitl.command("approve")
@@ -112,6 +124,7 @@ def hitl_approve(review_id: str, note: Optional[str]):
     """Approve a pending review."""
     queue = HITLQueue()
     reviewer = _reviewer()
+    review_id = _full_id(queue, review_id)
     review = queue.resolve(review_id, HITLStatus.APPROVED, reviewer, reviewer_note=note)
     console.print(f"[green]✓[/green] Review {review_id} approved by {reviewer}")
     if note:
@@ -129,6 +142,7 @@ def hitl_reject(review_id: str, reason: Optional[str]):
     """Reject a pending review."""
     queue = HITLQueue()
     reviewer = _reviewer()
+    review_id = _full_id(queue, review_id)
     queue.resolve(review_id, HITLStatus.REJECTED, reviewer, reviewer_note=reason)
     console.print(f"[red]✗[/red] Review {review_id} rejected by {reviewer}")
     if reason:
@@ -145,6 +159,7 @@ def hitl_escalate(review_id: str, escalate_to: Optional[str], note: Optional[str
     """Escalate a review to a senior reviewer."""
     queue = HITLQueue()
     reviewer = _reviewer()
+    review_id = _full_id(queue, review_id)
     review = queue.resolve(
         review_id,
         HITLStatus.ESCALATED,

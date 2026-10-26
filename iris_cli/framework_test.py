@@ -350,7 +350,9 @@ def _save_result(result: FrameworkTestResult) -> Path:
 
 def _build_result(framework: str, agent: str, passport: AgentPassport) -> FrameworkTestResult:
     bundle = _framework_bundle(framework)
-    vault = EvidenceVault(agent_id=agent)
+    from iris_core.evidence.locate import vault_id_for_passport
+
+    vault = EvidenceVault(agent_id=vault_id_for_passport(passport, agent))
     summary = vault.get_summary(last_reviewed_at=passport.last_reviewed_at.isoformat() if passport.last_reviewed_at else None)
     agent_dir = Path.cwd() / "governance" / "agents" / agent
     policy_file = agent_dir / "policy.cedar"

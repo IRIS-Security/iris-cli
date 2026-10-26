@@ -466,7 +466,9 @@ def _format_single_event(event: dict, output_format: str) -> str:
 def _vault_agent_dirs(vault_dir: Optional[Path], agent: Optional[str]) -> Iterable[Path]:
     vault_root = vault_dir or Path.home() / ".iris" / "evidence"
     if agent:
-        yield vault_root / agent
+        from iris_core.evidence.locate import resolve_vault_id
+
+        yield vault_root / resolve_vault_id(agent, None, vault_root)
         return
     if not vault_root.exists():
         return

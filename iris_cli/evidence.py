@@ -55,8 +55,16 @@ def _last_reviewed_iso(passport: AgentPassport) -> Optional[str]:
     return None
 
 
-def _open_vault(agent: str, vault_dir: Optional[Path]) -> EvidenceVault:
-    return EvidenceVault(agent_id=agent, vault_dir=vault_dir)
+def _open_vault(
+    agent: str, vault_dir: Optional[Path], governance_dir: Optional[Path] = None
+) -> EvidenceVault:
+    """Open the vault the SDK actually writes to: by passport agent_id when it exists."""
+    from iris_core.evidence.locate import resolve_vault_id
+
+    return EvidenceVault(
+        agent_id=resolve_vault_id(agent, _governance_dir(governance_dir), vault_dir),
+        vault_dir=vault_dir,
+    )
 
 
 def _compliance_status(passport: AgentPassport) -> List[dict]:
@@ -154,7 +162,9 @@ def _top_violations(violations_by_rule: Dict[str, int], limit: int = 5) -> List[
     rule_names = {r["rule_id"]: r["name"] for r in get_colorado_rules()["rules"]}
     rule_names.update(
         {
+            "IRIS-001": "No policy loaded (run iris compile)",
             "IRIS-TOOL-001": "Tool not in declared permissions",
+            "IRIS-TOOL-002": "Action not in declared permissions for tool",
             "IRIS-XR-001": "Cross-region transfer attempted",
             "IRIS-ENV-001": "Environment not authorized",
         }
@@ -191,10 +201,24 @@ def build_report_data(
 
     retention_warning = vault.get_retention_warning()
     oldest_age_days = None
-    if summary.retention_days_remaining < EvidenceVault.FREE_RETENTION_DAYS:
-        oldest_age_days = (
-            EvidenceVault.FREE_RETENTION_DAYS - summary.retention_days_remaining
-        )
+    stamps = [e.get("timestamp", "") for e in events if e.get("timestamp")]
+    if stamps:
+        try:
+            from datetime import timezone
+
+            parsed = []
+            for stamp in stamps:
+                ts = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                parsed.append(ts if ts.tzinfo else ts.replace(tzinfo=timezone.utc))
+            oldest_age_days = max((datetime.now(timezone.utc) - min(parsed)).days, 0)
+        except ValueError:
+            oldest_age_days = None
+
+    from iris_core.assessment.engagement import evidence_status
+
+    signed = evidence_status(vault._agent_id, vault._dir.parent)
+    tags = [t.value for t in passport.compliance_tags]
+    colorado = any(t.startswith("colorado") for t in tags)
 
     return {
         "agent": agent,
@@ -207,7 +231,17 @@ def build_report_data(
             "frameworks": [t.value for t in passport.compliance_tags],
             "assessment_id": passport.evidence_vault_id,
         },
-        "compliance": _compliance_status(passport),
+        "compliance": _compliance_status(passport) if colorado else [],
+        "signed_evidence": {
+            "events": signed.events,
+            "agent_actions": signed.actions,
+            "blocked": signed.blocked,
+            "chain_valid": signed.chain_valid,
+            "first_broken_event": signed.first_broken_event,
+            "first_event_at": signed.first_event_at,
+            "last_event_at": signed.last_event_at,
+            "controls": signed.controls,
+        },
         "statistics": {
             "total_evaluations": summary.total_evaluations,
             "pass_rate": summary.compliance_pass_rate,
@@ -233,6 +267,45 @@ def build_report_data(
     }
 
 
+def _signed_markdown(signed: Optional[dict]) -> List[str]:
+    from iris_core.evidence.catalog import FRAMEWORKS, MAPPING_BASIS, control_title
+
+    lines = ["", "## Signed Evidence and Control Coverage", ""]
+    if not signed or not signed.get("events"):
+        lines.append("- No signed evidence recorded yet. Wrap tool calls with IRIS to start recording.")
+        return lines
+    state = "intact" if signed["chain_valid"] else f"altered starting at event {signed['first_broken_event']}"
+    lines.append(
+        f"- **Signed events:** {signed['events']} ({signed['agent_actions']} agent actions, "
+        f"{signed['blocked']} blocked), {signed['first_event_at']} to {signed['last_event_at']}; chain {state}"
+    )
+    if signed.get("controls"):
+        lines += ["", "| Framework | Control | Requirement | Evidence events |", "| --- | --- | --- | --- |"]
+        for fw in FRAMEWORKS:
+            for control, count in sorted(signed["controls"].get(fw, {}).items()):
+                lines.append(f"| {FRAMEWORKS[fw]} | {control} | {control_title(fw, control)} | {count} |")
+        lines += ["", f"_{MAPPING_BASIS}_"]
+    return lines
+
+
+def _print_signed_table(signed: Optional[dict]) -> None:
+    from iris_core.evidence.catalog import FRAMEWORKS
+
+    console.print("\n[bold]SIGNED EVIDENCE[/bold]")
+    if not signed or not signed.get("events"):
+        console.print("[dim]No signed evidence recorded yet.[/dim]")
+        return
+    state = "[green]intact[/green]" if signed["chain_valid"] else "[red]ALTERED[/red]"
+    console.print(
+        f"Signed events: {signed['events']}  │  agent actions: {signed['agent_actions']}  │  "
+        f"blocked: {signed['blocked']}  │  chain: {state}"
+    )
+    for fw, name in FRAMEWORKS.items():
+        controls = signed.get("controls", {}).get(fw)
+        if controls:
+            console.print(f"{name}: " + ", ".join(f"{c} ({n})" for c, n in sorted(controls.items())))
+
+
 def format_report_markdown(data: dict) -> str:
     identity = data["identity"]
     stats = data["statistics"]
@@ -248,10 +321,10 @@ def format_report_markdown(data: dict) -> str:
         f"- **High-risk AI:** {'Yes' if identity['is_high_risk_ai'] else 'No'}",
         f"- **Framework:** {', '.join(identity['frameworks']) or 'none'}",
         f"- **Assessment ID:** {identity['assessment_id'] or 'none'}",
-        "",
-        "## Compliance Status",
-        "",
     ]
+    lines.extend(_signed_markdown(data.get("signed_evidence")))
+    if data["compliance"]:
+        lines.extend(["", "## Colorado AI Act Status", ""])
 
     for item in data["compliance"]:
         icon = {"PASS": "✓", "FAIL": "✗", "PENDING": "⚠"}.get(item["status"], "?")
@@ -341,28 +414,10 @@ def format_report_markdown(data: dict) -> str:
         lines.append(
             f"- **Oldest event:** {retention['oldest_event_age_days']} days ago"
         )
-        lines.append(
-            f"- **Free tier limit:** {retention['free_tier_days']} days  │  "
-            f"{retention['days_remaining']} days remaining"
-        )
+        lines.append(f"- **Retention limit:** {retention['free_tier_days']} days on the free tier")
     else:
         lines.append(f"- **Free tier limit:** {retention.get('free_tier_days', 30)} days")
         lines.append("- **Oldest event:** none recorded")
-    if retention.get("upgrade_available") and retention.get("warning"):
-        lines.extend(
-            [
-                "",
-                retention["warning"],
-            ]
-        )
-    elif retention.get("upgrade_available"):
-        lines.extend(
-            [
-                "",
-                "Upgrade to IRIS Pro for unlimited retention + PDF export",
-                "iris license activate <your-key>",
-            ]
-        )
 
     lines.extend(
         [
@@ -383,6 +438,11 @@ def format_report_markdown(data: dict) -> str:
         ]
     )
 
+    signed = data.get("signed_evidence") or {}
+    if signed.get("chain_valid") is True:
+        lines.append(f"- ✓ Signed evidence chain intact ({signed['events']} events verified)")
+    elif signed.get("chain_valid") is False:
+        lines.append(f"- ✗ **Signed evidence altered starting at event {signed['first_broken_event']}**")
     if data["integrity"]["valid"]:
         lines.append("- ✓ All entries consistent")
     else:
@@ -402,6 +462,7 @@ def format_report_json(data: dict) -> str:
         "period": data["period"],
         "identity": data["identity"],
         "compliance": data["compliance"],
+        "signed_evidence": data.get("signed_evidence"),
         "statistics": data["statistics"],
         "top_violations": data["top_violations"],
         "violation_trend": data["violation_trend"],
@@ -451,7 +512,9 @@ def _print_report_table(data: dict) -> None:
         f"Assessment ID: {identity['assessment_id'] or 'none'}"
     )
 
-    console.print("\n[bold]COMPLIANCE STATUS[/bold]")
+    _print_signed_table(data.get("signed_evidence"))
+    if data["compliance"]:
+        console.print("\n[bold]COLORADO AI ACT STATUS[/bold]")
     for item in data["compliance"]:
         icon = {"PASS": "[green]✓[/green]", "FAIL": "[red]✗[/red]", "PENDING": "[yellow]⚠[/yellow]"}.get(
             item["status"], "?"
@@ -489,13 +552,12 @@ def _print_report_table(data: dict) -> None:
     if retention.get("oldest_event_age_days") is not None:
         console.print(
             f"Oldest event: {retention['oldest_event_age_days']} days ago\n"
-            f"Free tier limit: {retention['free_tier_days']} days  │  "
-            f"{retention['days_remaining']} days remaining"
+            f"Free tier limit: {retention['free_tier_days']} days"
         )
     else:
         console.print(
             f"Free tier limit: {retention.get('free_tier_days', 30)} days  │  "
-            "no events recorded"
+            "no events in this period"
         )
     if retention.get("upgrade_available"):
         console.print("[dim]─────────────────────────────────────────────────────────[/dim]")
@@ -524,6 +586,11 @@ def _print_report_table(data: dict) -> None:
     )
 
     console.print("\n[bold]INTEGRITY CHECK[/bold]")
+    signed = data.get("signed_evidence") or {}
+    if signed.get("chain_valid") is True:
+        console.print(f"[green]✓ Signed evidence chain intact ({signed['events']} events verified)[/green]")
+    elif signed.get("chain_valid") is False:
+        console.print(f"[red]✗ Signed evidence altered starting at event {signed['first_broken_event']}[/red]")
     if data["integrity"]["valid"]:
         console.print("[green]✓ All vault entries consistent[/green]")
     else:
@@ -604,7 +671,9 @@ def aggregate_stats(governance_dir: Path, vault_root: Optional[Path] = None) -> 
         agent_name = passport.name or passport_file.parent.name
         agents.append(agent_name)
 
-        vault = EvidenceVault(agent_id=agent_name, vault_dir=vault_root)
+        from iris_core.evidence.locate import vault_id_for_passport
+
+        vault = EvidenceVault(agent_id=vault_id_for_passport(passport, agent_name, vault_root), vault_dir=vault_root)
         last_reviewed = _last_reviewed_iso(passport)
         summary = vault.get_summary(last_reviewed_at=last_reviewed)
 
@@ -713,7 +782,7 @@ def _load_query_events(
 ) -> List[dict]:
     events: List[dict] = []
     if agent:
-        vault = _open_vault(agent, vault_dir)
+        vault = _open_vault(agent, vault_dir, governance_dir)
         for event in vault.get_events(limit=10_000):
             tagged = dict(event)
             tagged["_agent"] = agent
@@ -722,7 +791,7 @@ def _load_query_events(
 
     gov_dir = _governance_dir(governance_dir)
     for agent_name in _discover_agent_names(gov_dir):
-        vault = _open_vault(agent_name, vault_dir)
+        vault = _open_vault(agent_name, vault_dir, governance_dir)
         for event in vault.get_events(limit=10_000):
             tagged = dict(event)
             tagged["_agent"] = agent_name
@@ -883,7 +952,7 @@ def evidence_report(agent, output_format, since, governance_dir, vault_dir):
     """
     try:
         passport = _load_passport(agent, governance_dir)
-        vault = _open_vault(agent, vault_dir)
+        vault = _open_vault(agent, vault_dir, governance_dir)
         data = build_report_data(agent, passport, vault, since=since)
     except FileNotFoundError as exc:
         console.print(f"[red]{exc}[/red]")
@@ -917,7 +986,7 @@ def evidence_list(agent, violations_only, limit, governance_dir, vault_dir):
         console.print(f"[red]{exc}[/red]")
         raise SystemExit(1)
 
-    vault = _open_vault(agent, vault_dir)
+    vault = _open_vault(agent, vault_dir, governance_dir)
     events = vault.get_events(limit=limit)
     if violations_only:
         events = [e for e in events if e.get("violations")]
@@ -1155,7 +1224,7 @@ def evidence_export(agent, output_path, output_format, governance_dir, vault_dir
             Feature.EVIDENCE_EXPORT_AUDITOR,
             context="evidence export --format oscal (auditor deliverable)",
         )
-        vault = _open_vault(agent, vault_dir)
+        vault = _open_vault(agent, vault_dir, governance_dir)
         vault_data = vault.export_vault()
         oscal_payload = {
             "oscal-version": "1.1.2",
@@ -1171,7 +1240,7 @@ def evidence_export(agent, output_path, output_format, governance_dir, vault_dir
         console.print(f"[green]✓ Exported OSCAL evidence to {output_path}[/green]")
         return
 
-    vault = _open_vault(agent, vault_dir)
+    vault = _open_vault(agent, vault_dir, governance_dir)
     vault_data = vault.export_vault()
     vault_data["passport"] = {
         "owner": passport.owner,
@@ -1181,13 +1250,31 @@ def evidence_export(agent, output_path, output_format, governance_dir, vault_dir
     }
     vault_data["integrity"] = vault.check_integrity(passport.evidence_vault_id)
 
+    from iris_core.evidence.package import signed_evidence_export
+
+    signed = signed_evidence_export(vault._agent_id, vault._dir.parent)
+    vault_data["signed_evidence"] = signed
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if output_format == "json":
         output_path.write_text(json.dumps(vault_data, indent=2))
     else:
         _export_csv(vault_data, output_path)
+        if signed["control_mappings"]:
+            controls_path = output_path.with_name(output_path.stem + "-controls.csv")
+            with open(controls_path, "w", newline="") as handle:
+                writer = csv.writer(handle)
+                writer.writerow(["event_id", "framework", "control", "requirement"])
+                for m in signed["control_mappings"]:
+                    writer.writerow([m["event_id"], m["framework_name"], m["control"], m["title"]])
+            console.print(f"[green]✓ Control mappings: {controls_path}[/green]")
 
     console.print(f"[green]✓ Exported to {output_path}[/green]")
+    integrity = signed["integrity"]
+    if integrity["valid"] is True:
+        console.print(f"[green]✓ Signed evidence chain verified ({integrity['events_checked']} events)[/green]")
+    elif integrity["valid"] is False:
+        console.print(f"[red]✗ Signed evidence altered starting at event {integrity['first_broken_event']}[/red]")
 
 
 @evidence.command("stats")

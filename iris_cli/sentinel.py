@@ -79,7 +79,8 @@ def sentinel(
     governance_dir: Optional[Path],
 ) -> None:
     """
-    Continuous governance monitoring — drift, violations, cost anomalies.
+    Continuous governance monitoring — drift, violations, cost anomalies, and
+    runtime detections from signed evidence (see `iris detect`).
 
     Alias: iris drift watch
     """
@@ -113,6 +114,15 @@ def sentinel(
                 )
                 console.print("               Action: iris scan --discover --govern")
 
+            from iris_core.detection import detect_all
+
+            for agent_alerts in detect_all(Path.home() / ".iris" / "evidence", record=True).values():
+                for alert in agent_alerts:
+                    if agent and alert.agent_name != agent:
+                        continue
+                    ts = datetime.now().strftime("%H:%M:%S")
+                    console.print(f"[{ts}]  ◐ {alert.severity} {alert.rule} — {alert.agent_name}: {alert.summary}")
+                    console.print(f"               Response: {alert.response}")
             if report.has_degradation():
                 _render_sentinel_alert(report, detector)
             else:

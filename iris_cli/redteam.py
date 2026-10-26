@@ -132,7 +132,7 @@ def format_redteam_result(result: RedTeamResult, *, pro: bool, verbose: bool = F
 @click.option(
     "--suite",
     "test_suite",
-    type=click.Choice(["prompt", "permission", "data_exfil", "cross_region", "policy", "full"]),
+    type=click.Choice(["prompt", "permission", "action", "data_exfil", "cross_region", "policy", "full"]),
     default="full",
     show_default=True,
 )
